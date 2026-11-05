@@ -1,9 +1,9 @@
 import asyncio
 
-from alembic import context
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import create_async_engine
 
+from alembic import context
 from app.core.config import get_settings
 from app.core.models import Base
 
@@ -13,7 +13,9 @@ target_metadata = Base.metadata
 EXTERNAL_TABLES = {"langchain_pg_collection", "langchain_pg_embedding"}
 
 
-def include_object(obj: object, name: str | None, type_: str, reflected: bool, compare_to: object) -> bool:
+def include_object(
+    obj: object, name: str | None, type_: str, reflected: bool, compare_to: object
+) -> bool:
     return not (type_ == "table" and name in EXTERNAL_TABLES)
 
 
@@ -22,15 +24,20 @@ def get_url() -> str:
 
 
 def run_migrations_offline() -> None:
-    context.configure(url=get_url(), target_metadata=target_metadata, literal_binds=True,
-                      include_object=include_object)
+    context.configure(
+        url=get_url(),
+        target_metadata=target_metadata,
+        literal_binds=True,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata,
-                      include_object=include_object)
+    context.configure(
+        connection=connection, target_metadata=target_metadata, include_object=include_object
+    )
     with context.begin_transaction():
         context.run_migrations()
 

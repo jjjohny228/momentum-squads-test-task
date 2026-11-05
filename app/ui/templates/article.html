@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ article.title }}{% endblock %}
+{% block content %}
+<p class="muted">База знань · {{ article.category }} · {{ article.tags|join(", ") }}</p>
+<article>{{ content|safe }}</article>
+{% endblock %}

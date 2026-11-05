@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Звернення</h1>
+<p class="filters">
+  {% for f in filters %}
+    <a href="/ui/tickets{% if f %}?status={{ f.value }}{% endif %}" class="{% if f == status %}active{% endif %}">{{ f.value if f else "усі" }}</a>
+  {% endfor %}
+</p>
+<table>
+  <thead><tr><th>Створено</th><th>Тікет</th><th>Клієнт</th><th>Повідомлення</th><th>Статус</th></tr></thead>
+  <tbody hx-get="/ui/tickets{% if status %}?status={{ status.value }}{% endif %}" hx-trigger="every 5s" hx-swap="innerHTML">
+    {% include "_ticket_rows.html" %}
+  </tbody>
+</table>
+{% endblock %}

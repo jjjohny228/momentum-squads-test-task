@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Support operator{% endblock %}</title>
+  <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0 auto; max-width: 1100px; padding: 16px; color: #222; }
+    a { color: #0b57d0; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #ddd; vertical-align: top; }
+    .badge { padding: 2px 6px; border-radius: 4px; font-size: 12px; background: #eee; white-space: nowrap; }
+    .s-draft_ready { background: #fff3c4; } .s-sent { background: #d5f5dd; }
+    .s-failed { background: #fbd5d5; } .s-rejected { background: #e3e3e3; }
+    .s-generating, .s-received, .s-approved, .s-sending { background: #dbe8ff; }
+    .filters a { margin-right: 8px; } .filters a.active { font-weight: bold; }
+    textarea { width: 100%; min-height: 220px; font: inherit; }
+    .card { border: 1px solid #ddd; border-radius: 6px; padding: 16px; }
+    .msg { white-space: pre-wrap; background: #f6f6f6; padding: 8px; border-radius: 4px; }
+    .error { color: #b00020; } .warn { color: #8a5a00; } .muted { color: #666; font-size: 13px; }
+    button { padding: 6px 14px; margin-right: 8px; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <p><a href="/ui/tickets">Звернення</a> · <a href="/docs">API docs</a></p>
+  {% block content %}{% endblock %}
+</body>
+</html>

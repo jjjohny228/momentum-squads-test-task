@@ -1,0 +1,11 @@
+{% for t in tickets %}
+<tr>
+  <td class="muted">{{ t.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+  <td><a href="/ui/tickets/{{ t.id }}">{{ t.external_ticket_id }}</a></td>
+  <td>{{ t.customer_email }}</td>
+  <td>{{ t.message[:120] }}</td>
+  <td><span class="badge s-{{ t.status }}">{{ t.status }}</span>{% if t.needs_manual_reply %} <span class="warn">⚠</span>{% endif %}</td>
+</tr>
+{% else %}
+<tr><td colspan="5" class="muted">Немає звернень</td></tr>
+{% endfor %}

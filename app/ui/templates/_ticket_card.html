@@ -1,0 +1,46 @@
+<div class="card" id="ticket-card"
+     {% if ticket.status in ("received", "generating", "approved", "sending") %}
+     hx-get="/ui/tickets/{{ ticket.id }}" hx-trigger="every 3s" hx-swap="outerHTML"
+     {% endif %}>
+  <p>Статус: <span class="badge s-{{ ticket.status }}">{{ ticket.status }}</span>
+     {% if ticket.draft_source %}<span class="muted">· чернетка: {{ ticket.draft_source }}</span>{% endif %}</p>
+  <p class="muted">{{ ticket.customer_email }} · event {{ ticket.event_id }} · {{ ticket.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+  {% if error %}<p class="error">{{ error }}</p>{% endif %}
+  {% if ticket.last_error %}<p class="error">Остання помилка: {{ ticket.last_error }}</p>{% endif %}
+  {% if ticket.needs_manual_reply %}<p class="warn">⚠ База знань не покриває питання — перевірте відповідь уважно.</p>{% endif %}
+
+  <h3>Повідомлення клієнта</h3>
+  <div class="msg">{{ ticket.message }}</div>
+
+  {% if ticket.sources %}
+  <h3>Знайдені статті</h3>
+  <ul>{% for s in ticket.sources %}<li><a href="{{ s.url }}" target="_blank">{{ s.title }}</a>{% if s.score is not none %} <span class="muted">({{ "%.2f"|format(s.score) }})</span>{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+
+  {% if ticket.status == "draft_ready" %}
+  <h3>Чернетка відповіді</h3>
+  <form hx-post="/ui/tickets/{{ ticket.id }}/approve" hx-target="#ticket-card" hx-swap="outerHTML">
+    <textarea name="message">{{ ticket.draft }}</textarea>
+    <p>
+      <button type="submit">Підтвердити й надіслати</button>
+      <button type="button" hx-post="/ui/tickets/{{ ticket.id }}/reject" hx-target="#ticket-card" hx-swap="outerHTML" hx-confirm="Відхилити чернетку?">Відхилити</button>
+    </p>
+  </form>
+  {% elif ticket.final_reply %}
+  <h3>Відповідь клієнту</h3>
+  <div class="msg">{{ ticket.final_reply }}</div>
+  {% elif ticket.draft %}
+  <h3>Чернетка</h3>
+  <div class="msg">{{ ticket.draft }}</div>
+  {% elif ticket.status in ("received", "generating") %}
+  <p class="muted">Генеруємо чернетку…</p>
+  {% endif %}
+
+  {% if ticket.status == "failed" %}
+  <p>
+    <button hx-post="/ui/tickets/{{ ticket.id }}/retry" hx-target="#ticket-card" hx-swap="outerHTML">Повторити</button>
+    <button hx-post="/ui/tickets/{{ ticket.id }}/reject" hx-target="#ticket-card" hx-swap="outerHTML">Відхилити</button>
+  </p>
+  {% endif %}
+  {% if ticket.sent_at %}<p class="muted">Надіслано {{ ticket.sent_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>{% endif %}
+</div>

@@ -7,7 +7,7 @@ from app.core.db import Base
 
 
 class ProviderCall(Base):
-    """One row per request sent to the LLM provider; the sliding-window rate limiter counts these."""
+    """One row per request sent to the LLM provider, counted by the sliding-window limiter."""
 
     __tablename__ = "provider_calls"
 

@@ -26,4 +26,6 @@ class Article(TimestampMixin, Base):
         Computed("to_tsvector('simple', title || ' ' || body)", persisted=True),
     )
 
-    __table_args__ = (Index("ix_kb_articles_search_vector", "search_vector", postgresql_using="gin"),)
+    __table_args__ = (
+        Index("ix_kb_articles_search_vector", "search_vector", postgresql_using="gin"),
+    )

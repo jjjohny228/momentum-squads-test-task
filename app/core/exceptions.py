@@ -35,14 +35,20 @@ class ForbiddenError(DomainError):
 def _problem(status: int, title: str, detail: str, instance: str) -> JSONResponse:
     return JSONResponse(
         status_code=status,
-        content={"type": "about:blank", "title": title, "status": status, "detail": detail,
-                 "instance": instance},
+        content={
+            "type": "about:blank",
+            "title": title,
+            "status": status,
+            "detail": detail,
+            "instance": instance,
+        },
         media_type="application/problem+json",
     )
 
 
 async def domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
-    assert isinstance(exc, DomainError)
+    if not isinstance(exc, DomainError):  # pragma: no cover
+        raise exc
     return _problem(exc.status_code, exc.title, exc.detail, request.url.path)
 
 

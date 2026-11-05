@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}{{ ticket.external_ticket_id }}{% endblock %}
+{% block content %}
+<h1>Тікет {{ ticket.external_ticket_id }}</h1>
+{% include "_ticket_card.html" %}
+{% endblock %}
