@@ -1,0 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE DATABASE support_test OWNER support;
+\c support_test
+CREATE EXTENSION IF NOT EXISTS vector;

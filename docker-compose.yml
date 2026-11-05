@@ -1,0 +1,74 @@
+x-app: &app
+  build: .
+  env_file:
+    - path: .env
+      required: false
+  environment: &app-env
+    DATABASE_URL: postgresql+psycopg://support:support@db:5432/support
+    PUBLIC_BASE_URL: http://localhost:8000
+    REPLY_URL_ALLOWED_HOSTS: '["mock-helpdesk"]'
+    LOG_JSON: "true"
+  restart: unless-stopped
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: support
+      POSTGRES_PASSWORD: support
+      POSTGRES_DB: support
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U support -d support"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *app
+    command: sh -c "alembic upgrade head && python -m scripts.seed_kb"
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  worker:
+    <<: *app
+    command: python -m app.jobs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  mock-helpdesk:
+    <<: *app
+    command: uvicorn mock_helpdesk.main:app --host 0.0.0.0 --port 8001
+    environment:
+      <<: *app-env
+      MOCK_WEBHOOK_URL: http://api:8000/webhooks/helpdesk
+      MOCK_PUBLIC_REPLY_BASE: http://mock-helpdesk:8001
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
