@@ -8,6 +8,8 @@ x-app: &app
     PUBLIC_BASE_URL: http://localhost:8000
     REPLY_URL_ALLOWED_HOSTS: '["mock-helpdesk"]'
     LOG_JSON: "true"
+    FAKE_LLM_DELAY_MIN: ${FAKE_LLM_DELAY_MIN:-5}
+    FAKE_LLM_DELAY_MAX: ${FAKE_LLM_DELAY_MAX:-30}
   restart: unless-stopped
 
 services:
@@ -64,6 +66,14 @@ services:
       <<: *app-env
       MOCK_WEBHOOK_URL: http://api:8000/webhooks/helpdesk
       MOCK_PUBLIC_REPLY_BASE: http://mock-helpdesk:8001
+      MOCK_FAILURE_RATE: ${MOCK_FAILURE_RATE:-0.2}
+      MOCK_SLOW_RATE: ${MOCK_SLOW_RATE:-0.1}
+      MOCK_SLOW_SECONDS: ${MOCK_SLOW_SECONDS:-12}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     ports:
       - "8001:8001"
     depends_on:
