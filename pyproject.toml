@@ -1,0 +1,74 @@
+[project]
+name = "momentum-support"
+version = "0.1.0"
+description = "Helpdesk support service: LLM-drafted replies with RAG and operator moderation"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "psycopg[binary,pool]>=3.2",
+    "alembic>=1.14",
+    "httpx>=0.28",
+    "tenacity>=9.0",
+    "structlog>=24.4",
+    "jinja2>=3.1",
+    "python-multipart>=0.0.17",
+    "pyyaml>=6.0",
+    "markdown>=3.7",
+    "langchain-core>=0.3",
+    "langchain-openai>=0.3",
+    "langchain-postgres>=0.0.13",
+    "langchain-text-splitters>=0.3",
+]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.8",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
+    "respx>=0.21",
+    "pre-commit>=4.0",
+    "types-pyyaml>=6.0",
+    "types-markdown>=3.7",
+]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["alembic/versions"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "N", "S", "ASYNC", "RUF", "SIM", "PT", "C4", "PL"]
+ignore = ["PLR0913", "PLR2004"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S105", "S106", "PLR0915"]
+"scripts/**" = ["S311", "T201"]
+"mock_helpdesk/**" = ["S311"]
+"app/drafting/llm.py" = ["S311"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+plugins = ["pydantic.mypy"]
+files = ["app", "mock_helpdesk"]
+
+[[tool.mypy.overrides]]
+module = ["langchain_postgres.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+testpaths = ["tests"]
+addopts = "-ra"
