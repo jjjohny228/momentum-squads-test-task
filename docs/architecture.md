@@ -112,17 +112,16 @@ kb/articles/*.md, kb/embeddings.json, scripts/embed_kb.py, scripts/seed_kb.py, s
 postman/
   MomentumSupport.postman_collection.json   # Postman v2.1
   local.postman_environment.json            # baseUrl, mockHelpdeskUrl, ticketId
-```
-
-### Postman-коллекция
-Папки: **Health**; **Webhook** (новое событие, тот же `event_id` повторно → дубликат, невалидное тело → 422); **Tickets API** (list с фильтром, get, approve с правкой текста, reject, retry, повторный approve → 409); **Knowledge base** (`/kb/{slug}`); **Mock helpdesk** (`GET /replies`, сброс, настройка вероятности 5xx/задержки). Переменные `{{baseUrl}}`, `{{eventId}}` (генерация `{{$guid}}` в pre-request), `{{ticketId}}` сохраняется из ответа. В каждом запросе `pm.test` на статус-код и схему. Запуск без GUI: `npx newman run postman/...json -e postman/local...json` — добавляем как опциональный шаг docker-smoke в CI.
 alembic/ (env.py + миграции; CREATE EXTENSION vector)
-tests/ (unit/, integration/)
+tests/
 Dockerfile (multi-stage, uv, non-root), docker-compose.yml, .env.example
 .github/workflows/ci.yml
 CLAUDE.md, README.md, docs/architecture.md
 pyproject.toml (+ [tool.ruff], [tool.mypy], [tool.pytest])
 ```
+
+### Postman-коллекция
+Папки: **Health**; **Webhook** (новое событие, тот же `event_id` повторно → дубликат, невалидное тело → 422); **Tickets API** (list с фильтром, get, approve с правкой текста, reject, retry, повторный approve → 409); **Knowledge base** (`/kb/{slug}`); **Mock helpdesk** (`GET /replies`, сброс, настройка вероятности 5xx/задержки). Переменные `{{baseUrl}}`, `{{eventId}}` (генерация `{{$guid}}` в pre-request), `{{ticketId}}` сохраняется из ответа. В каждом запросе `pm.test` на статус-код и схему. Запуск без GUI: `npx newman run postman/...json -e postman/local...json` — добавляем как опциональный шаг docker-smoke в CI.
 
 ## CI (GitHub Actions, `ci.yml`, на push/PR)
 - `lint`: `uv sync --frozen` → `ruff check .` → `ruff format --check .` → `mypy app`.
