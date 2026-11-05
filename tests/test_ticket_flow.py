@@ -204,3 +204,16 @@ async def test_operator_basic_auth(client: AsyncClient, app) -> None:  # type: i
     assert (await client.get("/api/v1/tickets", auth=("op", "pw"))).status_code == 200
     # the webhook stays reachable for the helpdesk
     assert (await client.post("/webhooks/helpdesk", json=webhook_payload())).status_code == 202
+
+
+async def test_stats(
+    client: AsyncClient, settings: Settings, sessionmaker: async_sessionmaker[AsyncSession]
+) -> None:
+    await create_ticket(client)
+    await create_ticket(client)
+    await Worker(make_ctx(settings, sessionmaker)).run_until_idle()
+
+    stats = (await client.get("/api/v1/tickets/stats")).json()
+
+    assert stats["tickets_by_status"] == {"draft_ready": 2}
+    assert stats["rate_limit_rpm"] == 60

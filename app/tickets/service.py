@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.logging import get_logger
+from app.drafting.repository import ProviderCallRepository
 from app.jobs.models import JobKind
 from app.jobs.repository import JobRepository
 from app.tickets.exceptions import InvalidTransitionError, TicketNotFoundError
@@ -65,6 +66,12 @@ class TicketService:
     ) -> tuple[list[Ticket], int]:
         async with self.session.begin():
             return await self.tickets.list_page(status=status, limit=limit, offset=offset)
+
+    async def stats(self) -> tuple[dict[str, int], int]:
+        async with self.session.begin():
+            by_status = await self.tickets.count_by_status()
+            calls = await ProviderCallRepository(self.session).count_last(60)
+        return by_status, calls
 
     # --- operator actions ---------------------------------------------------------------------
 

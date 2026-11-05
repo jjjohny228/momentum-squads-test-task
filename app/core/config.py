@@ -49,6 +49,7 @@ class Settings(BaseSettings):
 
     # Worker / jobs
     worker_concurrency: int = 30
+    worker_send_concurrency: int = 10
     worker_poll_interval: float = 1.0
     job_lease_seconds: int = 120
     job_max_attempts: int = 6

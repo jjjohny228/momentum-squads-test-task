@@ -21,9 +21,11 @@ def to_libpq_dsn(sqlalchemy_url: str) -> str:
 
 
 class Worker:
-    """Runs up to `concurrency` jobs at once (LLM calls are I/O-bound, so asyncio is enough).
+    """Runs jobs concurrently with asyncio (LLM and helpdesk calls are I/O-bound).
 
-    Wakes up on Postgres NOTIFY when a job is enqueued and also polls as a fallback.
+    Each job kind has its own pool, so a drafting backlog waiting on the LLM rate limit never
+    delays sending replies the operator already approved. Wakes up on Postgres NOTIFY when a job
+    is enqueued and also polls as a fallback.
     """
 
     def __init__(
@@ -38,41 +40,50 @@ class Worker:
         self.handlers = handlers or HANDLERS
         self.lease = timedelta(seconds=self.settings.job_lease_seconds)
         self.shutdown_timeout = shutdown_timeout
-        self._wake = asyncio.Event()
+        self.concurrency = {
+            JobKind.GENERATE_DRAFT: self.settings.worker_concurrency,
+            JobKind.SEND_REPLY: self.settings.worker_send_concurrency,
+        }
+        self._wake = {kind: asyncio.Event() for kind in JobKind}
         self._running: set[asyncio.Task[None]] = set()
 
     async def run(self, stop: asyncio.Event) -> None:
-        semaphore = asyncio.Semaphore(self.settings.worker_concurrency)
         listener = asyncio.create_task(self._listen(stop))
-        log.info("worker_started", concurrency=self.settings.worker_concurrency)
+        loops = [asyncio.create_task(self._loop(kind, stop)) for kind in self.handlers]
+        log.info("worker_started", concurrency={k.value: v for k, v in self.concurrency.items()})
         try:
-            while not stop.is_set():
-                await semaphore.acquire()
-                self._wake.clear()
-                try:
-                    job = await self._claim()
-                except Exception:
-                    log.exception("claim_failed")
-                    job = None
-                if job is None:
-                    semaphore.release()
-                    with contextlib.suppress(TimeoutError):
-                        await asyncio.wait_for(
-                            self._wake.wait(), self.settings.worker_poll_interval
-                        )
-                    continue
-                task = asyncio.create_task(self._execute(job))
-                self._running.add(task)
-                task.add_done_callback(self._running.discard)
-                task.add_done_callback(lambda _: semaphore.release())
+            await stop.wait()
         finally:
+            for loop in loops:
+                loop.cancel()
             listener.cancel()
             await self._drain()
             log.info("worker_stopped")
 
+    async def _loop(self, kind: JobKind, stop: asyncio.Event) -> None:
+        semaphore = asyncio.Semaphore(self.concurrency[kind])
+        wake = self._wake[kind]
+        while not stop.is_set():
+            await semaphore.acquire()
+            wake.clear()
+            try:
+                job = await self._claim([kind])
+            except Exception:
+                log.exception("claim_failed", kind=kind.value)
+                job = None
+            if job is None:
+                semaphore.release()
+                with contextlib.suppress(TimeoutError):
+                    await asyncio.wait_for(wake.wait(), self.settings.worker_poll_interval)
+                continue
+            task = asyncio.create_task(self._execute(job))
+            self._running.add(task)
+            task.add_done_callback(self._running.discard)
+            task.add_done_callback(lambda _: semaphore.release())
+
     async def run_until_idle(self) -> None:
         """Process jobs until none is due (used by tests)."""
-        while job := await self._claim():
+        while job := await self._claim(list(self.handlers)):
             await self._execute(job)
 
     async def _drain(self) -> None:
@@ -83,9 +94,9 @@ class Worker:
         for task in pending:  # their leases expire and another worker picks them up
             task.cancel()
 
-    async def _claim(self) -> ClaimedJob | None:
+    async def _claim(self, kinds: list[JobKind]) -> ClaimedJob | None:
         async with self.ctx.sessionmaker() as session, session.begin():
-            return await JobRepository(session).claim(self.lease)
+            return await JobRepository(session).claim(self.lease, kinds)
 
     async def _execute(self, job: ClaimedJob) -> None:
         heartbeat = asyncio.create_task(self._heartbeat(job.id))
@@ -147,8 +158,12 @@ class Worker:
             try:
                 async with await psycopg.AsyncConnection.connect(dsn, autocommit=True) as conn:
                     await conn.execute(f"LISTEN {JOBS_CHANNEL}")
-                    async for _ in conn.notifies():
-                        self._wake.set()
+                    async for notify in conn.notifies():
+                        try:
+                            self._wake[JobKind(notify.payload)].set()
+                        except ValueError:
+                            for event in self._wake.values():
+                                event.set()
             except asyncio.CancelledError:
                 raise
             except Exception:

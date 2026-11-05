@@ -3,10 +3,10 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
 
-from app.core.dependencies import require_operator
+from app.core.dependencies import SettingsDep, require_operator
 from app.tickets.dependencies import TicketServiceDep
 from app.tickets.models import TicketStatus
-from app.tickets.schemas import ApproveIn, TicketOut, TicketPage
+from app.tickets.schemas import ApproveIn, StatsOut, TicketOut, TicketPage
 
 router = APIRouter(
     prefix="/api/v1/tickets", tags=["tickets"], dependencies=[Depends(require_operator)]
@@ -23,6 +23,17 @@ async def list_tickets(
     items, total = await service.list_page(status=status, limit=limit, offset=offset)
     return TicketPage(
         items=[TicketOut.model_validate(t) for t in items], total=total, limit=limit, offset=offset
+    )
+
+
+@router.get("/stats")
+async def ticket_stats(service: TicketServiceDep, settings: SettingsDep) -> StatsOut:
+    """Ticket counts by status and provider requests in the last 60 s (rate-limit check)."""
+    by_status, calls = await service.stats()
+    return StatsOut(
+        tickets_by_status=by_status,
+        provider_calls_last_minute=calls,
+        rate_limit_rpm=settings.rate_limit_rpm,
     )
 
 

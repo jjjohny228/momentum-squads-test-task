@@ -57,6 +57,12 @@ class TicketPage(BaseModel):
     offset: int
 
 
+class StatsOut(BaseModel):
+    tickets_by_status: dict[str, int]
+    provider_calls_last_minute: int
+    rate_limit_rpm: int
+
+
 class ApproveIn(BaseModel):
     message: str | None = Field(
         default=None,

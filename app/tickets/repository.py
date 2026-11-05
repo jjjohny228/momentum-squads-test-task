@@ -64,6 +64,12 @@ class TicketRepository:
         total = await self.session.scalar(count)
         return list(rows), total or 0
 
+    async def count_by_status(self) -> dict[str, int]:
+        rows = await self.session.execute(
+            select(Ticket.status, func.count()).group_by(Ticket.status)
+        )
+        return {str(status): int(n) for status, n in rows}
+
     async def transition(
         self,
         ticket_id: uuid.UUID,

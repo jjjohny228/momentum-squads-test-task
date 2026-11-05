@@ -8,9 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.drafting.models import ProviderCall
 from app.drafting.rate_limiter import CallKind, PostgresRateLimiter
+from app.jobs.handlers import JobContext
 from app.jobs.models import JobKind
-from app.jobs.repository import JobRepository
+from app.jobs.repository import ClaimedJob, JobRepository
+from app.jobs.worker import Worker
 from app.tickets.repository import TicketRepository
+from tests.conftest import make_settings
+from tests.fakes import make_ctx
 
 
 async def make_jobs(sessionmaker: async_sessionmaker[AsyncSession], n: int) -> None:
@@ -29,7 +33,7 @@ async def make_jobs(sessionmaker: async_sessionmaker[AsyncSession], n: int) -> N
 
 async def claim(sessionmaker: async_sessionmaker[AsyncSession], lease: float = 60):  # type: ignore[no-untyped-def]
     async with sessionmaker() as s, s.begin():
-        return await JobRepository(s).claim(timedelta(seconds=lease))
+        return await JobRepository(s).claim(timedelta(seconds=lease), list(JobKind))
 
 
 async def test_concurrent_claims_never_return_the_same_job(
@@ -91,3 +95,56 @@ async def test_embeddings_can_bypass_the_limiter(
     async with sessionmaker() as s:
         n = await s.scalar(select(func.count()).select_from(ProviderCall))
     assert n == 1
+
+
+async def test_claim_filters_by_kind(sessionmaker: async_sessionmaker[AsyncSession]) -> None:
+    await make_jobs(sessionmaker, 2)  # generate_draft jobs
+
+    async with sessionmaker() as s, s.begin():
+        send = await JobRepository(s).claim(timedelta(seconds=60), [JobKind.SEND_REPLY])
+        draft = await JobRepository(s).claim(timedelta(seconds=60), [JobKind.GENERATE_DRAFT])
+
+    assert send is None
+    assert draft is not None
+
+
+async def test_send_pool_is_not_blocked_by_drafting_backlog(
+    sessionmaker: async_sessionmaker[AsyncSession],
+) -> None:
+    settings = make_settings(
+        worker_concurrency=1, worker_send_concurrency=1, worker_poll_interval=0.05
+    )
+    release = asyncio.Event()
+    sent = asyncio.Event()
+
+    async def slow_draft(ctx: JobContext, job: ClaimedJob) -> None:
+        await release.wait()  # e.g. stuck behind the LLM rate limit
+
+    async def send(ctx: JobContext, job: ClaimedJob) -> None:
+        sent.set()
+
+    await make_jobs(sessionmaker, 3)
+    async with sessionmaker() as s, s.begin():
+        tid = await TicketRepository(s).insert_if_new(
+            event_id="evt_send",
+            external_ticket_id="T",
+            customer_email="a@b.c",
+            message="m",
+            reply_url="http://x",
+        )
+        assert tid is not None
+        await JobRepository(s).enqueue(JobKind.SEND_REPLY, tid, 3)
+
+    worker = Worker(
+        make_ctx(settings, sessionmaker),
+        handlers={JobKind.GENERATE_DRAFT: slow_draft, JobKind.SEND_REPLY: send},
+        shutdown_timeout=0.1,
+    )
+    stop = asyncio.Event()
+    run = asyncio.create_task(worker.run(stop))
+    try:
+        await asyncio.wait_for(sent.wait(), timeout=3)
+    finally:
+        release.set()
+        stop.set()
+        await run

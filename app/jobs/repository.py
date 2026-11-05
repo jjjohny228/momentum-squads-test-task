@@ -32,7 +32,7 @@ class JobRepository:
         await self.session.execute(select(func.pg_notify(JOBS_CHANNEL, kind.value)))
         return int(job_id)
 
-    async def claim(self, lease: timedelta) -> ClaimedJob | None:
+    async def claim(self, lease: timedelta, kinds: list[JobKind]) -> ClaimedJob | None:
         """Atomically take one due job. Expired leases (crashed worker) are claimable again."""
         row = (
             await self.session.execute(
@@ -45,8 +45,9 @@ class JobRepository:
                         updated_at = clock_timestamp()
                     WHERE id = (
                         SELECT id FROM jobs
-                        WHERE (status = 'queued' AND run_after <= clock_timestamp())
-                           OR (status = 'running' AND locked_until < clock_timestamp())
+                        WHERE kind = ANY(CAST(:kinds AS text[]))
+                          AND ((status = 'queued' AND run_after <= clock_timestamp())
+                           OR (status = 'running' AND locked_until < clock_timestamp()))
                         ORDER BY run_after
                         FOR UPDATE SKIP LOCKED
                         LIMIT 1
@@ -54,7 +55,7 @@ class JobRepository:
                     RETURNING id, kind, ticket_id, attempts, max_attempts
                     """
                 ),
-                {"lease": lease},
+                {"lease": lease, "kinds": [k.value for k in kinds]},
             )
         ).one_or_none()
         if row is None:
