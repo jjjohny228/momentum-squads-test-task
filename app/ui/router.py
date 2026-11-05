@@ -1,5 +1,6 @@
 """Operator UI: thin HTML/HTMX adapter over the same TicketService used by the JSON API."""
 
+import os
 import uuid
 from pathlib import Path
 from typing import Annotated
@@ -15,6 +16,8 @@ from app.tickets.models import Ticket, TicketStatus
 
 router = APIRouter(include_in_schema=False, dependencies=[Depends(require_operator)])
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
+# Shows the LangSmith thread id on ticket pages when tracing is on
+templates.env.globals["tracing_enabled"] = lambda: os.environ.get("LANGSMITH_TRACING") == "true"
 
 STATUS_FILTERS = [None, *TicketStatus]
 

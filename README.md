@@ -108,6 +108,31 @@ OPENAI_API_KEY=sk-... uv run python -m scripts.embed_kb
 Якщо ключ є, а кешу немає, `migrate` порахує ембединги сам. Якщо немає ні ключа, ні кешу, працює повнотекстовий
 пошук.
 
+## Трейсинг у LangSmith (threads)
+
+Увімкніть у `.env` і перезапустіть стек:
+
+```bash
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=lsv2_...
+LANGSMITH_PROJECT=momentum-support
+# LANGSMITH_ENDPOINT=https://eu.api.smith.langchain.com   # якщо акаунт в EU
+```
+
+**Один тікет — один thread.** Кожен трейс тікета має metadata `thread_id = ticket_id` із хелпдеску (`T-1042`), тож
+у LangSmith (**Threads** у проєкті `momentum-support`) видно весь життєвий цикл звернення. Наступні події того
+самого тікета хелпдеску потрапляють у той самий тред.
+
+| Root-трейс | Звідки | Що всередині |
+|---|---|---|
+| `generate_draft` | worker | `kb_retrieve` (retriever: стратегія vector/fulltext, знайдені статті зі score) → `draft_chain` (prompt → `ChatOpenAI` → structured output, токени, latency) або `keyless_static_draft` з помилкою 401 від провайдера |
+| `operator_approve` / `operator_reject` / `operator_retry` | api | чернетка, чи редагував оператор, фінальний текст |
+| `send_reply` | worker | `reply_url`, текст, `idempotency_key`; кожна спроба (ретраї після 5xx/таймаутів) — окремий трейс з помилкою |
+
+Metadata кожного рану: `thread_id`, `ticket_uuid`, `event_id`, `job_id`, `attempt`. За ними можна фільтрувати,
+наприклад `metadata.attempt > 1`, щоб знайти ретраї. У картці тікета в UI показано його `thread_id`.
+Без `LANGSMITH_API_KEY` трейсинг вимкнений і нічого нікуди не відправляється.
+
 ## Архітектура
 
 ```
@@ -228,6 +253,7 @@ tests/
 | `REPLY_URL_ALLOWED_HOSTS` | `[]` (усі) | захист від SSRF через `reply_url` |
 | `WEBHOOK_SECRET` | — | якщо задано, вимагає заголовок `X-Webhook-Secret` |
 | `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` | — | HTTP Basic для UI та `/api/v1` |
+| `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | `false` / — / `momentum-support` | трейсинг, thread = тікет |
 | `MOCK_FAILURE_RATE` / `MOCK_SLOW_RATE` / `MOCK_SLOW_SECONDS` | `0.2` / `0.1` / `12` | хаос у моку |
 
 ## Робота з AI-агентом

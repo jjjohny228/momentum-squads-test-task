@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     # Helpdesk client
     helpdesk_timeout_seconds: float = 10.0
 
+    # LangSmith tracing (threads = helpdesk tickets)
+    langsmith_tracing: bool = False
+    langsmith_api_key: SecretStr | None = None
+    langsmith_project: str = "momentum-support"
+    langsmith_endpoint: str | None = None
+
     # Operator UI / API basic auth (disabled when empty)
     operator_username: str | None = None
     operator_password: SecretStr | None = None

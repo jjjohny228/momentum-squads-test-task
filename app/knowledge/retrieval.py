@@ -2,6 +2,7 @@ from typing import Protocol
 
 from langchain_core.embeddings import Embeddings
 from langchain_postgres import PGVector
+from langsmith import traceable
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
@@ -31,6 +32,20 @@ def article_url(settings: Settings, slug: str) -> str:
     return f"{settings.public_base_url.rstrip('/')}/kb/{slug}"
 
 
+def _retrieval_outputs(result: RetrievalResult) -> dict[str, object]:
+    # LangSmith renders `documents` of a retriever run as a list of retrieved docs
+    return {
+        "strategy": result.strategy.value,
+        "documents": [
+            {
+                "page_content": a.body,
+                "metadata": {"slug": a.slug, "title": a.title, "url": a.url, "score": a.score},
+            }
+            for a in result.articles
+        ],
+    }
+
+
 class Retriever(Protocol):
     async def retrieve(self, query: str) -> RetrievalResult: ...
 
@@ -54,6 +69,12 @@ class KnowledgeRetriever:
         self.sessionmaker = sessionmaker
         self.limiter = limiter
 
+    @traceable(
+        name="kb_retrieve",
+        run_type="retriever",
+        process_inputs=lambda inputs: {"query": inputs["query"]},
+        process_outputs=_retrieval_outputs,
+    )
     async def retrieve(self, query: str) -> RetrievalResult:
         try:
             vector = await call_provider(

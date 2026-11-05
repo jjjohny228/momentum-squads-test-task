@@ -24,6 +24,7 @@ dependencies = [
     "langchain-postgres>=0.0.13",
     "langchain-text-splitters>=0.3",
     "email-validator>=2.2",
+    "langsmith>=0.3",
 ]
 
 [dependency-groups]

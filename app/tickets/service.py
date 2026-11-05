@@ -1,11 +1,13 @@
 import uuid
 from dataclasses import dataclass
+from typing import Any
 
 from sqlalchemy import func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.logging import get_logger
+from app.core.tracing import thread_metadata, ticket_trace
 from app.drafting.repository import ProviderCallRepository
 from app.jobs.models import JobKind
 from app.jobs.repository import JobRepository
@@ -21,6 +23,22 @@ log = get_logger(__name__)
 class IntakeResult:
     created: bool
     ticket_id: uuid.UUID | None
+
+
+async def _trace_operator_action(
+    name: str,
+    ticket: Ticket,
+    *,
+    inputs: dict[str, Any],
+    outputs: dict[str, Any] | None = None,
+) -> None:
+    """Puts the operator's decision into the ticket's LangSmith thread (no-op when disabled)."""
+    metadata = thread_metadata(
+        external_ticket_id=ticket.external_ticket_id, ticket_id=ticket.id, event_id=ticket.event_id
+    )
+    async with ticket_trace(name, metadata=metadata, inputs=inputs, tags=["operator"]) as run:
+        if run is not None:
+            run.add_outputs({"status": str(ticket.status), **(outputs or {})})
 
 
 class TicketService:
@@ -96,6 +114,12 @@ class TicketService:
                 raise InvalidTransitionError(ticket_id, current.status, "approve")
             await self.jobs.enqueue(JobKind.SEND_REPLY, ticket_id, self.settings.job_max_attempts)
         log.info("ticket_approved", ticket_id=str(ticket_id), edited=message is not None)
+        await _trace_operator_action(
+            "operator_approve",
+            ticket,
+            inputs={"draft": current.draft, "edited": bool(message and message.strip())},
+            outputs={"final_reply": ticket.final_reply},
+        )
         return ticket
 
     async def reject(self, ticket_id: uuid.UUID) -> Ticket:
@@ -108,6 +132,7 @@ class TicketService:
             if ticket is None:
                 raise await self._transition_error(ticket_id, "reject")
         log.info("ticket_rejected", ticket_id=str(ticket_id))
+        await _trace_operator_action("operator_reject", ticket, inputs={"draft": ticket.draft})
         return ticket
 
     async def retry(self, ticket_id: uuid.UUID) -> Ticket:
@@ -127,6 +152,11 @@ class TicketService:
                 raise InvalidTransitionError(ticket_id, current.status, "retry")
             await self.jobs.enqueue(kind, ticket_id, self.settings.job_max_attempts)
         log.info("ticket_retry", ticket_id=str(ticket_id), job=kind.value)
+        await _trace_operator_action(
+            "operator_retry",
+            ticket,
+            inputs={"previous_error": current.last_error, "job": kind.value},
+        )
         return ticket
 
     # --- worker-side transitions --------------------------------------------------------------

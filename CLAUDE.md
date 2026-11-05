@@ -26,5 +26,7 @@ Cross-cutting code lives in `app/core`.
   `app/drafting/rate_limiter.py`.
 - Status transitions are conditional UPDATEs (`WHERE status = ...`) - never read-then-write.
 - Transactions are owned by services; repositories never commit.
+- New LLM/provider work must run inside `app.core.tracing.ticket_trace` (thread_id = helpdesk ticket id)
+  so it shows up in the ticket's LangSmith thread.
 - Keep mypy strict and ruff clean; add tests for every behavior change.
 - Migrations are hand-written in `alembic/versions`.

@@ -4,7 +4,8 @@
      {% endif %}>
   <p>Статус: <span class="badge s-{{ ticket.status }}">{{ ticket.status }}</span>
      {% if ticket.draft_source %}<span class="muted">· чернетка: {{ ticket.draft_source }}</span>{% endif %}</p>
-  <p class="muted">{{ ticket.customer_email }} · event {{ ticket.event_id }} · {{ ticket.created_at.strftime("%Y-%m-%d %H:%M:%S") }}</p>
+  <p class="muted">{{ ticket.customer_email }} · event {{ ticket.event_id }} · {{ ticket.created_at.strftime("%Y-%m-%d %H:%M:%S") }}
+     {% if tracing_enabled() %}· LangSmith thread_id: <code>{{ ticket.external_ticket_id }}</code>{% endif %}</p>
   {% if error %}<p class="error">{{ error }}</p>{% endif %}
   {% if ticket.last_error %}<p class="error">Остання помилка: {{ ticket.last_error }}</p>{% endif %}
   {% if ticket.needs_manual_reply %}<p class="warn">⚠ База знань не покриває питання — перевірте відповідь уважно.</p>{% endif %}

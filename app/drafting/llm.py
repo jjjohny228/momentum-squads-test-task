@@ -5,7 +5,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.runnables import Runnable
+from langchain_core.runnables import Runnable, RunnableConfig
+from langsmith import traceable
 
 from app.core.config import Settings
 from app.core.logging import get_logger
@@ -24,6 +25,10 @@ from app.tickets.models import DraftSource
 from app.tickets.schemas import SourceRef
 
 log = get_logger(__name__)
+
+# Run names/tags as they appear in LangSmith (thread metadata is inherited from the job trace)
+CHAIN_CONFIG: RunnableConfig = {"run_name": "draft_chain", "tags": ["llm"]}
+KEYLESS_CHAIN_CONFIG: RunnableConfig = {"run_name": "draft_chain", "tags": ["llm", "keyless"]}
 
 
 def build_draft_chain(model: BaseChatModel) -> Runnable[dict[str, Any], Any]:
@@ -73,7 +78,7 @@ class LLMDraftGenerator:
             return await self._keyless(inputs, retrieval)
 
         output: DraftOutput = await call_provider(
-            lambda: self.chain.ainvoke(inputs),
+            lambda: self.chain.ainvoke(inputs, config=CHAIN_CONFIG),
             limiter=self.limiter,
             kind=CallKind.CHAT,
             attempts=self.settings.llm_max_attempts,
@@ -88,6 +93,11 @@ class LLMDraftGenerator:
             retrieval=retrieval.strategy,
         )
 
+    @traceable(
+        name="keyless_static_draft",
+        process_inputs=lambda inputs: {"message": inputs["inputs"]["message"]},
+        process_outputs=lambda draft: {"draft": draft.text, "source": draft.source.value},
+    )
     async def _keyless(self, inputs: dict[str, Any], retrieval: RetrievalResult) -> GeneratedDraft:
         started = time.monotonic()
         target_delay = random.uniform(
@@ -95,7 +105,7 @@ class LLMDraftGenerator:
         )
         await self.limiter.acquire(CallKind.CHAT)
         try:
-            await self.chain.ainvoke(inputs)
+            await self.chain.ainvoke(inputs, config=KEYLESS_CHAIN_CONFIG)
         except Exception as exc:
             log.info("keyless_provider_call_rejected", error=type(exc).__name__)
         await self.sleep(max(0.0, target_delay - (time.monotonic() - started)))
