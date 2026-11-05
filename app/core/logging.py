@@ -23,7 +23,8 @@ def configure_logging(level: str = "INFO", json: bool = True) -> None:
     )
     logging.basicConfig(level=level, stream=sys.stdout, format="%(levelname)s %(name)s %(message)s")
     # httpx logs every request at INFO, too noisy next to our structured logs
-    logging.getLogger("httpx").setLevel(logging.WARNING)
+    for name in ("httpx", "httpx2"):
+        logging.getLogger(name).setLevel(logging.WARNING)
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:

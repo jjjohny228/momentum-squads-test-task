@@ -65,4 +65,4 @@ class ArticleRepository:
             .order_by(rank.desc())
             .limit(limit)
         )
-        return [(article, float(score)) for article, score in rows.tuples()]
+        return [(article, float(score)) for article, score in rows]

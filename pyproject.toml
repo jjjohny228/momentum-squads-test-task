@@ -51,8 +51,11 @@ extend-exclude = ["alembic/versions"]
 select = ["E", "W", "F", "I", "B", "UP", "N", "S", "ASYNC", "RUF", "SIM", "PT", "C4", "PL"]
 ignore = ["PLR0913", "PLR2004", "RUF001", "RUF002", "RUF003"]
 
+[tool.ruff.lint.isort]
+known-third-party = ["alembic"]
+
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "S105", "S106", "PLR0915"]
+"tests/**" = ["S101", "S105", "S106", "PLR0915", "PLR0917"]
 "scripts/**" = ["S311", "T201"]
 "mock_helpdesk/**" = ["S311"]
 "app/drafting/llm.py" = ["S311"]
@@ -73,3 +76,4 @@ asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
 testpaths = ["tests"]
 addopts = "-ra"
+filterwarnings = ["ignore::DeprecationWarning:langsmith.*"]

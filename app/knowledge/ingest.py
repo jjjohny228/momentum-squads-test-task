@@ -261,7 +261,8 @@ async def _delete_stale_vectors(
                 """
                 DELETE FROM langchain_pg_embedding e
                 USING langchain_pg_collection c
-                WHERE e.collection_id = c.uuid AND c.name = :name AND NOT (e.id = ANY(CAST(:keep AS text[])))
+                WHERE e.collection_id = c.uuid AND c.name = :name
+                  AND NOT (e.id = ANY(CAST(:keep AS text[])))
                 """
             ),
             {"name": collection, "keep": list(keep_ids)},
