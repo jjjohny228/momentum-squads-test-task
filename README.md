@@ -25,7 +25,7 @@ docker compose up --build
 | Вебхук | `POST http://localhost:8000/webhooks/helpdesk` |
 | Health | http://localhost:8000/health → `OK` |
 | Мок хелпдеску (Swagger) | http://localhost:8001/docs |
-| PostgreSQL | `localhost:5433`, `support` / `support` |
+| PostgreSQL | `localhost:5432`, `support` / `support` |
 
 Сервіс `migrate` запускається першим: застосовує міграції Alembic і завантажує базу знань (`kb/articles`) в БД.
 Після нього стартують `api`, `worker` і `mock-helpdesk`.

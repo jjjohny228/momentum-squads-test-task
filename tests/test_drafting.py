@@ -171,3 +171,25 @@ async def test_non_transient_llm_error_is_not_retried() -> None:
     with pytest.raises(ValueError, match="bad schema"):
         await generator.generate("q", RETRIEVAL)
     assert calls == 1
+
+
+async def test_product_name_comes_from_settings() -> None:
+    settings = make_settings(openai_api_key=None, product_name="Acme BI")
+    seen: list[dict[str, str]] = []
+
+    def record(inputs: dict[str, str]) -> None:
+        seen.append(inputs)
+        raise RuntimeError("401")
+
+    generator = LLMDraftGenerator(
+        settings=settings,
+        chain=RunnableLambda(record),
+        limiter=RecordingLimiter(),
+        sleep=RecordingSleep(),
+    )
+
+    draft = await generator.generate("PDF?", RETRIEVAL)
+
+    assert seen[0]["product"] == "Acme BI"  # reaches the system prompt
+    assert "команда підтримки Acme BI" in draft.text
+    assert "Pulsar" not in draft.text

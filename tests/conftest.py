@@ -1,5 +1,9 @@
 import os
 import uuid
+
+# Tests must never send traces to a real LangSmith project configured in the developer's .env.
+# Env vars take precedence over .env, and this runs before `app.main` is imported.
+os.environ["LANGSMITH_TRACING"] = "false"
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -16,7 +20,7 @@ from app.core.db import create_engine, create_sessionmaker
 from app.main import create_app
 
 TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL", "postgresql+psycopg://support:support@localhost:5433/support_test"
+    "TEST_DATABASE_URL", "postgresql+psycopg://support:support@localhost:5432/support_test"
 )
 
 

@@ -20,7 +20,7 @@ services:
       POSTGRES_PASSWORD: support
       POSTGRES_DB: support
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro

@@ -1,5 +1,6 @@
 """LangSmith tracing: every run of a ticket carries the same thread_id (one thread per ticket)."""
 
+import os
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -69,15 +70,14 @@ async def test_ticket_lifecycle_is_one_langsmith_thread(
 
 
 def test_tracing_requires_api_key(monkeypatch) -> None:  # type: ignore[no-untyped-def]
-    monkeypatch.delenv("LANGSMITH_TRACING", raising=False)
+    # configure_tracing writes os.environ; give it a throwaway copy restored after the test
+    monkeypatch.setattr(os, "environ", dict(os.environ))
     assert configure_tracing(make_settings(langsmith_tracing=True, langsmith_api_key=None)) is False
     assert configure_tracing(make_settings(langsmith_tracing=False)) is False
 
-    monkeypatch.setenv("LANGSMITH_API_KEY", "x")  # restored by monkeypatch afterwards
-    monkeypatch.setenv("LANGSMITH_PROJECT", "x")
     on = make_settings(langsmith_tracing=True, langsmith_api_key="lsv2_test", langsmith_project="p")
     assert configure_tracing(on) is True
-    configure_tracing(make_settings())  # leave tracing off for the other tests
+    assert os.environ["LANGSMITH_PROJECT"] == "p"
 
 
 async def test_langchain_and_retriever_runs_nest_under_ticket_trace() -> None:

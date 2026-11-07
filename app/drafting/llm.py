@@ -13,9 +13,8 @@ from app.core.logging import get_logger
 from app.drafting.prompts import (
     DRAFT_PROMPT,
     LINKS_HEADER_UK,
-    STATIC_REPLY_NO_ARTICLES_UK,
-    STATIC_REPLY_UK,
     format_context,
+    static_reply,
 )
 from app.drafting.rate_limiter import CallKind, RateLimiter
 from app.drafting.retry import call_provider
@@ -73,7 +72,11 @@ class LLMDraftGenerator:
         self.sleep = sleep
 
     async def generate(self, message: str, retrieval: RetrievalResult) -> GeneratedDraft:
-        inputs = {"message": message, "context": format_context(retrieval.articles)}
+        inputs = {
+            "message": message,
+            "context": format_context(retrieval.articles),
+            "product": self.settings.product_name,
+        }
         if not self.settings.has_openai_key:
             return await self._keyless(inputs, retrieval)
 
@@ -111,7 +114,7 @@ class LLMDraftGenerator:
         await self.sleep(max(0.0, target_delay - (time.monotonic() - started)))
 
         articles = retrieval.articles
-        answer = STATIC_REPLY_UK if articles else STATIC_REPLY_NO_ARTICLES_UK
+        answer = static_reply(self.settings.product_name, has_articles=bool(articles))
         return GeneratedDraft(
             text=render_reply(answer, articles),
             source=DraftSource.FALLBACK,

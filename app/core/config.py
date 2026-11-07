@@ -12,11 +12,13 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     app_name: str = "Momentum Support"
+    # Product the support team answers for: used in the LLM prompt and reply signatures
+    product_name: str = "Pulsar Analytics"
     log_level: str = "INFO"
     log_json: bool = True
     public_base_url: str = "http://localhost:8000"
 
-    database_url: str = "postgresql+psycopg://support:support@localhost:5433/support"
+    database_url: str = "postgresql+psycopg://support:support@localhost:5432/support"
     db_pool_size: int = 10
     db_max_overflow: int = 20
 
