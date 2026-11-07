@@ -4,6 +4,8 @@
 # The isolated test stack with throwaway credentials lives in docker-compose.test.yml.
 
 x-app: &app
+  # Locally the image is built from source; on the server CD sets APP_IMAGE to the pushed GHCR tag
+  image: ${APP_IMAGE:-momentum-support:local}
   build: .
   env_file:
     - path: .env

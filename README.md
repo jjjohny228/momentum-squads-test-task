@@ -222,7 +222,38 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pyt
 3. **docker**: `docker compose -f docker-compose.test.yml up --build`, перевірка `/health`, прогін Postman-колекції через newman проти
    живого стеку (зі збоями мока).
 
-Деплою немає, CD поки не налаштовано.
+4. **deploy** (CD, лише push у `main` після зелених lint/test/docker): збирає образ і пушить у GHCR
+   (`ghcr.io/<owner>/<repo>:<sha>` і `:latest`), копіює `docker-compose.yml` на сервер по SSH і виконує
+   `docker compose pull && docker compose up -d`. Міграції та сід виконує сервіс `migrate`. Після цього
+   job чекає `/health`, і якщо сервіс не піднявся, деплой падає з логами `api`/`migrate`.
+
+### Деплой на сервер
+
+Один раз на сервері (потрібні Docker і compose plugin):
+
+```bash
+sudo mkdir -p /opt/momentum-support && sudo chown "$USER" /opt/momentum-support
+cd /opt/momentum-support
+nano .env
+```
+
+`.env` заповнюється за `.env.example`. Секрети живуть тільки на сервері, у CI їх немає. Для домену
+обов'язково вкажіть `PUBLIC_BASE_URL=https://your-domain.com`, інакше посилання на статті у відповідях
+вказуватимуть на `localhost`. TLS і домен — на reverse proxy (Caddy/nginx) перед портом `8000`.
+
+У GitHub → Settings → Environments → `production` (там же можна ввімкнути ручний approve деплою):
+
+| Тип | Ім'я | Значення |
+|---|---|---|
+| Secret | `DEPLOY_HOST` | IP або домен сервера |
+| Secret | `DEPLOY_USER` | користувач з доступом до Docker |
+| Secret | `DEPLOY_SSH_KEY` | приватний ключ (публічний — у `~/.ssh/authorized_keys` на сервері) |
+| Secret | `DEPLOY_KNOWN_HOSTS` | вивід `ssh-keyscan -H <host>`, фіксує ключ сервера |
+| Variable | `DEPLOY_PATH` | необов'язково, за замовчуванням `/opt/momentum-support` |
+| Variable | `DEPLOY_PORT` | необов'язково, SSH-порт, за замовчуванням `22` |
+
+Деплой фіксує розгорнутий тег в `.env` сервера (`APP_IMAGE=...`), тож ручний `docker compose up -d` на сервері
+не відкотить версію. Відкат — вписати попередній `APP_IMAGE` і виконати `docker compose up -d`.
 
 ### Структура
 
@@ -263,6 +294,7 @@ tests/
 | `WEBHOOK_SECRET` | — | якщо задано, вимагає заголовок `X-Webhook-Secret` |
 | `OPERATOR_USERNAME` / `OPERATOR_PASSWORD` | — | HTTP Basic для UI та `/api/v1` |
 | `LANGSMITH_TRACING` / `LANGSMITH_API_KEY` / `LANGSMITH_PROJECT` | `false` / — / `momentum-support` | трейсинг, thread = тікет |
+| `PUBLIC_BASE_URL` | `http://localhost:8000` | публічна адреса сервісу для посилань на статті у відповідях |
 | `MOCK_FAILURE_RATE` / `MOCK_SLOW_RATE` / `MOCK_SLOW_SECONDS` | `0.2` / `0.1` / `12` | хаос у моку |
 
 ## Робота з AI-агентом
