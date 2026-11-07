@@ -1,7 +1,9 @@
 from functools import lru_cache
+from typing import Self
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy import URL
 
 # Used when no key is configured: the request still reaches OpenAI (and gets 401),
 # as required by the "no API key" mode.
@@ -18,7 +20,14 @@ class Settings(BaseSettings):
     log_json: bool = True
     public_base_url: str = "http://localhost:8000"
 
-    database_url: str = "postgresql+psycopg://support:support@localhost:5432/support"
+    # Either a full DATABASE_URL or the POSTGRES_* parts (the URL is built with proper escaping,
+    # so passwords may contain any characters). No credentials are hard-coded.
+    database_url: str = ""
+    postgres_user: str | None = None
+    postgres_password: SecretStr | None = None
+    postgres_db: str | None = None
+    postgres_host: str = "localhost"
+    postgres_port: int = 5432
     db_pool_size: int = 10
     db_max_overflow: int = 20
 
@@ -70,6 +79,25 @@ class Settings(BaseSettings):
     # Operator UI / API basic auth (disabled when empty)
     operator_username: str | None = None
     operator_password: SecretStr | None = None
+
+    @model_validator(mode="after")
+    def _build_database_url(self) -> Self:
+        if self.database_url:
+            return self
+        if not (self.postgres_user and self.postgres_password and self.postgres_db):
+            raise ValueError(
+                "Database is not configured: set DATABASE_URL or "
+                "POSTGRES_USER, POSTGRES_PASSWORD and POSTGRES_DB"
+            )
+        self.database_url = URL.create(
+            "postgresql+psycopg",
+            username=self.postgres_user,
+            password=self.postgres_password.get_secret_value(),
+            host=self.postgres_host,
+            port=self.postgres_port,
+            database=self.postgres_db,
+        ).render_as_string(hide_password=False)
+        return self
 
     @property
     def has_openai_key(self) -> bool:

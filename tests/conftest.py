@@ -1,9 +1,16 @@
 import os
 import uuid
 
-# Tests must never send traces to a real LangSmith project configured in the developer's .env.
-# Env vars take precedence over .env, and this runs before `app.main` is imported.
+# Runs before `app.main` is imported (it builds the app at import time); env vars take
+# precedence over the developer's .env:
+# - tests never send traces to a real LangSmith project;
+# - tests use the throwaway database of docker-compose.test.yml, never the production one.
 os.environ["LANGSMITH_TRACING"] = "false"
+TEST_DATABASE_URL = os.getenv(
+    "TEST_DATABASE_URL", "postgresql+psycopg://test:test@localhost:5434/support_test"
+)
+os.environ["DATABASE_URL"] = TEST_DATABASE_URL
+
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -18,10 +25,6 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.core.db import create_engine, create_sessionmaker
 from app.main import create_app
-
-TEST_DATABASE_URL = os.getenv(
-    "TEST_DATABASE_URL", "postgresql+psycopg://support:support@localhost:5432/support_test"
-)
 
 
 def make_settings(**overrides: Any) -> Settings:

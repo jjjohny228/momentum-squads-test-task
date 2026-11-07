@@ -31,18 +31,19 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: support
-          POSTGRES_PASSWORD: support
+          # throwaway CI-only credentials
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
           POSTGRES_DB: support_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U support -d support_test"
+          --health-cmd "pg_isready -U test -d support_test"
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
     env:
-      TEST_DATABASE_URL: postgresql+psycopg://support:support@localhost:5432/support_test
+      TEST_DATABASE_URL: postgresql+psycopg://test:test@localhost:5432/support_test
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v6
@@ -61,8 +62,8 @@ jobs:
     needs: [lint, test]
     steps:
       - uses: actions/checkout@v4
-      - name: Build and start the stack
-        run: docker compose up -d --build
+      - name: Build and start the test stack
+        run: docker compose -f docker-compose.test.yml up -d --build
         env:
           MOCK_FAILURE_RATE: "0.3"
           MOCK_SLOW_RATE: "0"
@@ -81,7 +82,7 @@ jobs:
           -e postman/local.postman_environment.json --bail
       - name: Logs on failure
         if: failure()
-        run: docker compose logs --no-color
+        run: docker compose -f docker-compose.test.yml logs --no-color
       - name: Stop
         if: always()
-        run: docker compose down -v
+        run: docker compose -f docker-compose.test.yml down -v

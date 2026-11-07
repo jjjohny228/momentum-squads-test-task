@@ -2,7 +2,6 @@ from langchain_core.prompts import ChatPromptTemplate
 
 from app.knowledge.schemas import RetrievedArticle
 
-# `{product}` is filled from settings.product_name (PRODUCT_NAME env) at invoke time
 SYSTEM_PROMPT = """You are a support agent for {product}, a SaaS analytics and reporting product.
 Write a reply DRAFT to the customer's message; a human operator reviews it before sending.
 

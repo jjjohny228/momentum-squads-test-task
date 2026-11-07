@@ -14,9 +14,17 @@ Docker Compose · GitHub Actions.
 
 ```bash
 git clone <repo> && cd MomentumTestTask
-cp .env.example .env        # необов'язково: впишіть OPENAI_API_KEY
+cp .env.example .env
 docker compose up --build
 ```
+
+У `docker-compose.yml` немає жодного захардкодженого секрету. Креди БД беруться з `.env`, а без `POSTGRES_*`
+compose не стартує. Порт Postgres назовні не публікується: БД доступна тільки всередині мережі compose
+(`docker compose exec db psql -U "$POSTGRES_USER" "$POSTGRES_DB"`). Мок хелпдеску вмикається профілем
+`COMPOSE_PROFILES=mock` (вже прописано в `.env.example`).
+
+Для тестів і CI є окремий ізольований стек `docker-compose.test.yml`: власне ім'я проєкту, volume і порт
+(`localhost:5434`), одноразові креди `test/test`, прискорений keyless-режим.
 
 | Що | Адреса |
 |---|---|
@@ -25,7 +33,6 @@ docker compose up --build
 | Вебхук | `POST http://localhost:8000/webhooks/helpdesk` |
 | Health | http://localhost:8000/health → `OK` |
 | Мок хелпдеску (Swagger) | http://localhost:8001/docs |
-| PostgreSQL | `localhost:5432`, `support` / `support` |
 
 Сервіс `migrate` запускається першим: застосовує міграції Alembic і завантажує базу знань (`kb/articles`) в БД.
 Після нього стартують `api`, `worker` і `mock-helpdesk`.
@@ -186,7 +193,8 @@ operator UI / JSON API ── approve: UPDATE … WHERE status='draft_ready' + j
 
 ```bash
 uv sync                                  # залежності (Python 3.14)
-docker compose up -d db                  # Postgres з pgvector (створює також support_test)
+docker compose -f docker-compose.test.yml up -d db   # тестовий Postgres: localhost:5434, test/test
+export DATABASE_URL=postgresql+psycopg://test:test@localhost:5434/support
 uv run alembic upgrade head
 uv run python -m scripts.seed_kb
 uv run uvicorn app.main:app --reload     # API + UI
@@ -200,7 +208,7 @@ uv run uvicorn mock_helpdesk.main:app --port 8001
 uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pytest
 ```
 
-Тести (51) йдуть на справжньому Postgres (`support_test`), бо `SKIP LOCKED`, `ON CONFLICT` і advisory locks не
+Тести йдуть на справжньому Postgres (`support_test` з тестового стеку; інший можна задати через `TEST_DATABASE_URL`), бо `SKIP LOCKED`, `ON CONFLICT` і advisory locks не
 мокаються. Покрито: дедуп вебхука (у т.ч. 20 одночасних доставок), швидкість під сплеском, повний життєвий цикл
 тікета, подвійний approve, ретраї відправлення з тим самим ключем, вичерпання спроб, lease після «падіння» воркера,
 ліміт на двох інстансах лімітера, ізоляцію пулів, векторний і FTS-пошук, метадані чанків, keyless-режим із
@@ -211,7 +219,7 @@ uv run ruff check . && uv run ruff format --check . && uv run mypy && uv run pyt
 `.github/workflows/ci.yml`:
 1. **lint**: `ruff check`, `ruff format --check`, `mypy` (strict);
 2. **test**: pytest із сервісом `pgvector/pgvector:pg16` і coverage;
-3. **docker**: `docker compose up --build`, перевірка `/health`, прогін Postman-колекції через newman проти
+3. **docker**: `docker compose -f docker-compose.test.yml up --build`, перевірка `/health`, прогін Postman-колекції через newman проти
    живого стеку (зі збоями мока).
 
 Деплою немає, CD поки не налаштовано.
@@ -244,6 +252,7 @@ tests/
 
 | Змінна | За замовчуванням | |
 |---|---|---|
+| `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | — (обов'язкові) | або повний `DATABASE_URL`; поза Docker також `POSTGRES_HOST` / `POSTGRES_PORT` |
 | `OPENAI_API_KEY` | — | порожній → keyless-режим |
 | `OPENAI_MODEL` / `OPENAI_EMBEDDING_MODEL` | `gpt-5.4-mini` / `text-embedding-3-small` | |
 | `RATE_LIMIT_RPM` | `60` | спільний бюджет усіх воркерів |

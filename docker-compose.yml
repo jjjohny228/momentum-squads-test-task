@@ -1,34 +1,39 @@
+# Production-like stack. All secrets come from .env (see .env.example); nothing is hard-coded.
+#   cp .env.example .env   # fill POSTGRES_PASSWORD etc.
+#   docker compose up --build
+# The isolated test stack with throwaway credentials lives in docker-compose.test.yml.
+
 x-app: &app
   build: .
   env_file:
     - path: .env
-      required: false
+      required: true
   environment: &app-env
-    DATABASE_URL: postgresql+psycopg://support:support@db:5432/support
-    PUBLIC_BASE_URL: http://localhost:8000
-    REPLY_URL_ALLOWED_HOSTS: '["mock-helpdesk"]'
+    # Credentials (POSTGRES_USER/PASSWORD/DB) come from .env; only the in-network address is set here
+    POSTGRES_HOST: db
+    POSTGRES_PORT: "5432"
+    PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8000}
+    REPLY_URL_ALLOWED_HOSTS: ${REPLY_URL_ALLOWED_HOSTS:-["mock-helpdesk"]}
     LOG_JSON: "true"
-    FAKE_LLM_DELAY_MIN: ${FAKE_LLM_DELAY_MIN:-5}
-    FAKE_LLM_DELAY_MAX: ${FAKE_LLM_DELAY_MAX:-30}
   restart: unless-stopped
 
 services:
   db:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: support
-      POSTGRES_PASSWORD: support
-      POSTGRES_DB: support
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env}
+    # No published port: the database is reachable only inside the compose network.
+    # For a local psql: docker compose exec db psql -U "$POSTGRES_USER" "$POSTGRES_DB"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./docker/postgres-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U support -d support"]
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
       interval: 2s
       timeout: 3s
       retries: 30
+    restart: unless-stopped
 
   migrate:
     <<: *app
@@ -42,7 +47,7 @@ services:
     <<: *app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -59,26 +64,23 @@ services:
       migrate:
         condition: service_completed_successfully
 
+  # There is no real helpdesk, so the mock is part of the demo deployment.
+  # Enabled via COMPOSE_PROFILES=mock in .env; drop it when a real helpdesk is connected.
   mock-helpdesk:
     <<: *app
+    profiles: ["mock"]
     command: uvicorn mock_helpdesk.main:app --host 0.0.0.0 --port 8001
     environment:
       <<: *app-env
       MOCK_WEBHOOK_URL: http://api:8000/webhooks/helpdesk
       MOCK_PUBLIC_REPLY_BASE: http://mock-helpdesk:8001
-      MOCK_FAILURE_RATE: ${MOCK_FAILURE_RATE:-0.2}
-      MOCK_SLOW_RATE: ${MOCK_SLOW_RATE:-0.1}
-      MOCK_SLOW_SECONDS: ${MOCK_SLOW_SECONDS:-12}
+    ports:
+      - "${MOCK_PORT:-8001}:8001"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 5s
       timeout: 3s
       retries: 10
-    ports:
-      - "8001:8001"
-    depends_on:
-      db:
-        condition: service_healthy
 
 volumes:
   pgdata:

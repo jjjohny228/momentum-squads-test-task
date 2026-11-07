@@ -1,0 +1,72 @@
+# Isolated TEST stack: throwaway credentials, its own project name, volume and DB port.
+# Never use these credentials outside of tests/CI.
+#   docker compose -f docker-compose.test.yml up -d db            # Postgres for `uv run pytest`
+#   docker compose -f docker-compose.test.yml up -d --build       # full stack (CI smoke, newman)
+name: momentum-test
+
+x-app: &app
+  build: .
+  environment: &app-env
+    DATABASE_URL: postgresql+psycopg://test:test@db:5432/support
+    PUBLIC_BASE_URL: http://localhost:8000
+    REPLY_URL_ALLOWED_HOSTS: '["mock-helpdesk"]'
+    LOG_JSON: "true"
+    FAKE_LLM_DELAY_MIN: ${FAKE_LLM_DELAY_MIN:-1}
+    FAKE_LLM_DELAY_MAX: ${FAKE_LLM_DELAY_MAX:-3}
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: support
+    ports:
+      - "127.0.0.1:${TEST_DB_PORT:-5434}:5432"
+    volumes:
+      - pgdata-test:/var/lib/postgresql/data
+      - ./docker/postgres-init.test.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d support"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    <<: *app
+    command: sh -c "alembic upgrade head && python -m scripts.seed_kb"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: python -m app.jobs
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  mock-helpdesk:
+    <<: *app
+    command: uvicorn mock_helpdesk.main:app --host 0.0.0.0 --port 8001
+    environment:
+      <<: *app-env
+      MOCK_WEBHOOK_URL: http://api:8000/webhooks/helpdesk
+      MOCK_PUBLIC_REPLY_BASE: http://mock-helpdesk:8001
+      MOCK_FAILURE_RATE: ${MOCK_FAILURE_RATE:-0.2}
+      MOCK_SLOW_RATE: ${MOCK_SLOW_RATE:-0.1}
+      MOCK_SLOW_SECONDS: ${MOCK_SLOW_SECONDS:-12}
+    ports:
+      - "8001:8001"
+
+volumes:
+  pgdata-test:
